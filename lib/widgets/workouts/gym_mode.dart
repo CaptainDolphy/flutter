@@ -16,6 +16,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
@@ -135,7 +136,7 @@ class _GymModeState extends State<GymMode> {
           ratioCompleted,
           _exercisePages,
         ));
-        out.add(TimerWidget(_controller, ratioCompleted, _exercisePages));
+        out.add(PauseWidget(_controller, ratioCompleted, _exercisePages));
         firstPage = false;
       }
     }
@@ -197,7 +198,7 @@ class StartPage extends StatelessWidget {
                               s.exerciseBaseObj
                                   .getExercise(Localizations.localeOf(context).languageCode)
                                   .name,
-                              style: Theme.of(context).textTheme.headline6,
+                              style: Theme.of(context).textTheme.titleLarge,
                             ),
                             ...set.getSmartRepr(s.exerciseBaseObj).map((e) => Text(e)).toList(),
                             const SizedBox(height: 15),
@@ -237,6 +238,8 @@ class LogPage extends StatefulWidget {
   final double _ratioCompleted;
   final Map<String, int> _exercisePages;
   final Log _log = Log.empty();
+
+
 
   LogPage(
     this._controller,
@@ -426,7 +429,7 @@ class _LogPageState extends State<LogPage> {
         children: [
           Text(
             AppLocalizations.of(context).newEntry,
-            style: Theme.of(context).textTheme.headline6,
+            style: Theme.of(context).textTheme.titleLarge,
             textAlign: TextAlign.center,
           ),
           if (!_detailed)
@@ -523,7 +526,7 @@ class _LogPageState extends State<LogPage> {
       children: [
         Text(
           AppLocalizations.of(context).labelWorkoutLogs,
-          style: Theme.of(context).textTheme.headline6,
+          style: Theme.of(context).textTheme.titleLarge,
           textAlign: TextAlign.center,
         ),
         ...widget._workoutPlan
@@ -569,7 +572,7 @@ class _LogPageState extends State<LogPage> {
       children: [
         Text(
           AppLocalizations.of(context).plateCalculator,
-          style: Theme.of(context).textTheme.headline6,
+          style: Theme.of(context).textTheme.titleLarge,
         ),
         SizedBox(
           height: 35,
@@ -617,6 +620,15 @@ class _LogPageState extends State<LogPage> {
     );
   }
 
+  Widget getStopwatch() {
+    const maxSeconds = 3600;
+    const isCountdown = false;
+    return Column(
+      children: const [
+              StopwatchWidget(maxSeconds,isCountdown)
+            ]
+    );
+  }
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -629,7 +641,7 @@ class _LogPageState extends State<LogPage> {
         Center(
           child: Text(
             widget._setting.singleSettingRepText,
-            style: Theme.of(context).textTheme.headline3,
+            style: Theme.of(context).textTheme.displaySmall,
             textAlign: TextAlign.center,
           ),
         ),
@@ -646,6 +658,9 @@ class _LogPageState extends State<LogPage> {
         // Only show calculator for barbell
         if (widget._log.exerciseBaseObj.equipment.map((e) => e.id).contains(ID_EQUIPMENT_BARBELL))
           getPlates(),
+        // Only show stopwatch for time
+        if (widget._setting.singleSettingRepText.contains(AppLocalizations.of(context).minutes))
+          getStopwatch(),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 15),
           child: Card(
@@ -688,13 +703,13 @@ class ExerciseOverview extends StatelessWidget {
             children: [
               Text(
                 getTranslation(_exerciseBase.category.name, context),
-                style: Theme.of(context).textTheme.headline6,
+                style: Theme.of(context).textTheme.titleLarge,
                 textAlign: TextAlign.center,
               ),
               ..._exerciseBase.equipment
                   .map((e) => Text(
                         getTranslation(e.name, context),
-                        style: Theme.of(context).textTheme.headline6,
+                        style: Theme.of(context).textTheme.titleLarge,
                         textAlign: TextAlign.center,
                       ))
                   .toList(),
@@ -925,46 +940,70 @@ class _SessionPageState extends State<SessionPage> {
 }
 
 class TimerWidget extends StatefulWidget {
-  final PageController _controller;
-  final double _ratioCompleted;
-  final Map<String, int> _exercisePages;
+  final int _maxSeconds;
+  final bool _isCountdown;
+  final int _timerControls; /// 0 = play, 1 = pause, 2 = reset
 
-  const TimerWidget(this._controller, this._ratioCompleted, this._exercisePages);
+  const TimerWidget(this._maxSeconds, this._isCountdown, this._timerControls);
 
   @override
   _TimerWidgetState createState() => _TimerWidgetState();
 }
 
 class _TimerWidgetState extends State<TimerWidget> {
-  // See https://stackoverflow.com/questions/54610121/flutter-countdown-timer
+  // See https://stackoverflow.com/questions/54610121/flutter-countdown-timer // done I guess
 
+  var _isRunning = false;
   Timer? _timer;
-  int _seconds = 1;
-  final _maxSeconds = 600;
+  int _seconds = 0;
   DateTime today = DateTime(2000, 1, 1, 0, 0, 0);
+  int timerControls = 1;
 
   void startTimer() {
-    setState(() {
-      _seconds = 0;
-    });
 
     _timer?.cancel();
 
+    if (widget._timerControls == 2) {
+      _isRunning = false;
+      setState(() {
+        _seconds = 0;
+      });
+      _timer?.cancel();
+    }
     const oneSecond = Duration(seconds: 1);
-    _timer = Timer.periodic(
-      oneSecond,
-      (Timer timer) {
-        if (_seconds == _maxSeconds) {
-          setState(() {
-            timer.cancel();
-          });
-        } else {
-          setState(() {
-            _seconds++;
-          });
-        }
-      },
-    );
+      _timer = Timer.periodic(
+          oneSecond,
+              (Timer timer) {
+            if (widget._timerControls == 0) {
+              _isRunning = true;
+             }
+            if (widget._timerControls == 1) {
+              _isRunning = false;
+              _timer?.cancel();
+            }
+
+            if (_isRunning) {
+              if (widget._isCountdown) {
+                if (_seconds == 0) {
+                  _timer?.cancel();
+                } else {
+                  setState(() {
+                    _seconds--;
+                  });
+                }
+              } else {
+                if (_seconds == widget._maxSeconds) {
+                  _timer?.cancel();
+                } else {
+                  setState(() {
+                    _seconds++;
+                  });
+                }
+              }
+            }
+          }
+      );
+
   }
 
   @override
@@ -977,29 +1016,168 @@ class _TimerWidgetState extends State<TimerWidget> {
   void initState() {
     super.initState();
     startTimer();
+    if (widget._isCountdown) {
+      _seconds = widget._maxSeconds;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    startTimer();
+    return  FittedBox(
+      fit: BoxFit.contain,
+      child: Text(
+          DateFormat('mm:ss').format(today.add(Duration(seconds: _seconds))),
+          style: const TextStyle(color: wgerPrimaryColor)
+      ),
+    );
+  }
+}
+
+class StopwatchWidget extends StatefulWidget {
+  final int _maxSeconds;
+  final bool _isCountdown;
+
+  const StopwatchWidget(this._maxSeconds,this._isCountdown);
+
+  @override
+  _StopwatchWidgetState createState() => _StopwatchWidgetState();
+}
+
+class  _StopwatchWidgetState extends State<StopwatchWidget> {
+
+  bool _isPressed = false;
+  int _timerControls = 1;
+
+  void _pressed() {
+    var newVal = true;
+    setState(() {
+      if (_isPressed) {
+        newVal = false;
+        _timerControls = 1;
+      } else {
+        newVal = true;
+        _timerControls = 0;
+      }
+      _isPressed = newVal;
+    });
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
   }
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        NavigationHeader(
-          AppLocalizations.of(context).pause,
-          widget._controller,
-          exercisePages: widget._exercisePages,
+        Text(
+          'Stopwatch', //TODO add localization here
+          style: Theme.of(context).textTheme.titleLarge,
         ),
-        Expanded(
-          child: Center(
-            child: Text(
-              DateFormat('m:ss').format(today.add(Duration(seconds: _seconds))),
-              style: Theme.of(context).textTheme.headline1!.copyWith(color: wgerPrimaryColor),
-            ),
-          ),
-        ),
-        NavigationFooter(widget._controller, widget._ratioCompleted),
-      ],
+        SizedBox(
+          height: 40,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Ink(
+                decoration: const ShapeDecoration(
+                  color: wgerPrimaryButtonColor,
+                  shape: CircleBorder(),
+                ),
+                child: IconButton(
+                  icon: Icon(
+                      _isPressed ? Icons.pause : Icons.play_arrow),
+                  color: Colors.white,
+                  onPressed: () {
+                    _pressed();
+                  }
+                    )
+                     ),
+              SizedBox(
+                width: 110,
+                child:
+                   TimerWidget(widget._maxSeconds, widget._isCountdown, _timerControls)
+                  ),
+              Ink(
+                  decoration: const ShapeDecoration(
+                    color: wgerPrimaryButtonColor,
+                    shape: CircleBorder(),
+                  ),
+                  child: IconButton(
+                      icon: Icon(Icons.stop),
+                      color: Colors.white,
+                      onPressed: () {
+                        setState(() {
+                          _timerControls = 2;
+                          _isPressed = false;
+                        });
+                      }
+                  )
+              ),
+            ]
+          )
+        )
+      ]
     );
   }
+}
+
+class PauseWidget extends StatefulWidget {
+  final PageController _controller;
+  final double _ratioCompleted;
+  final Map<String, int> _exercisePages;
+
+  const PauseWidget(this._controller, this._ratioCompleted, this._exercisePages);
+
+  @override
+  _PauseWidgetState createState() => _PauseWidgetState();
+}
+
+class _PauseWidgetState extends State<PauseWidget> {
+
+  final bool _isCountdown = true;
+  final int _timerControls = 0;
+  final int _maxSeconds = 600;
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+      return Column(
+         children: [
+           NavigationHeader(
+             AppLocalizations.of(context).pause,
+             widget._controller,
+             exercisePages: widget._exercisePages,
+           ),
+           Expanded(
+             child: Center(
+               child: SizedBox(
+                 width: 300,
+                 child: TimerWidget(_maxSeconds, _isCountdown, _timerControls)
+               )
+               ),
+             ),
+           NavigationFooter(widget._controller, widget._ratioCompleted),
+         ],
+       );
+  }
+
 }
 
 class NavigationFooter extends StatelessWidget {
@@ -1115,7 +1293,7 @@ class NavigationHeader extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 10),
             child: Text(
               _title,
-              style: Theme.of(context).textTheme.headline5,
+              style: Theme.of(context).textTheme.headlineSmall,
               textAlign: TextAlign.center,
             ),
           ),
@@ -1133,3 +1311,4 @@ class NavigationHeader extends StatelessWidget {
     );
   }
 }
+
